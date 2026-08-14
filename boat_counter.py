@@ -70,7 +70,15 @@ def build_line_zone(frame_width, frame_height):
         x1, y1, x2, y2 = frame_width // 2, 0, frame_width // 2, frame_height
     print(f"Counting line: ({x1}, {y1}) -> ({x2}, {y2}). "
           f"Set LINE_COORDS in .env to reposition it.")
-    return sv.LineZone(start=sv.Point(x1, y1), end=sv.Point(x2, y2))
+    # Default triggering_anchors checks all 4 box corners and skips any frame
+    # where corners fall on both sides at once ("ambiguous"). A boat's box is
+    # often wide relative to the line, so it can straddle both sides for many
+    # consecutive frames and never resolve - silently preventing any count.
+    # A single center point can't straddle, so it crosses cleanly.
+    return sv.LineZone(
+        start=sv.Point(x1, y1), end=sv.Point(x2, y2),
+        triggering_anchors=[sv.Position.CENTER],
+    )
 
 
 def log_daily_total(day, line_zone):
