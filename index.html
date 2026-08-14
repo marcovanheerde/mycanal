@@ -160,6 +160,129 @@
     margin: 14px 0 0;
   }
 
+  /* ---- boat gallery ---- */
+  .gallery-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+  }
+  .day-selector {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    max-width: 100%;
+    scrollbar-width: none;
+  }
+  .day-selector::-webkit-scrollbar { display: none; }
+  .day-pill {
+    flex: 0 0 auto;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-family: inherit;
+    white-space: nowrap;
+  }
+  .day-pill.active {
+    background: var(--series-1);
+    border-color: var(--series-1);
+    color: white;
+  }
+  .carousel {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    padding-bottom: 4px;
+    margin: 0 -4px;
+  }
+  .carousel::-webkit-scrollbar { height: 6px; }
+  .carousel-item {
+    flex: 0 0 auto;
+    scroll-snap-align: start;
+    cursor: pointer;
+    border: none;
+    padding: 0;
+    background: none;
+    font-family: inherit;
+  }
+  .carousel-item img {
+    width: 128px;
+    height: 96px;
+    object-fit: cover;
+    border-radius: 12px;
+    display: block;
+    background: var(--gridline);
+  }
+  .carousel-item time {
+    display: block;
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 6px;
+    text-align: center;
+  }
+
+  /* ---- lightbox ---- */
+  #lightbox {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 20;
+    padding: 24px;
+  }
+  #lightbox.open { display: flex; }
+  #lightbox img {
+    max-width: min(90vw, 720px);
+    max-height: 80vh;
+    border-radius: 12px;
+    display: block;
+  }
+  #lightbox .lb-time {
+    color: white;
+    font-size: 13px;
+    text-align: center;
+    margin-top: 12px;
+    opacity: 0.8;
+  }
+  #lightbox .lb-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(255,255,255,0.12);
+    color: white;
+    border: none;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    font-size: 20px;
+    cursor: pointer;
+  }
+  #lightbox .lb-prev { left: 16px; }
+  #lightbox .lb-next { right: 16px; }
+  #lightbox .lb-close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    background: rgba(255,255,255,0.12);
+    color: white;
+    border: none;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    font-size: 16px;
+    cursor: pointer;
+  }
+
   /* ---- chart card ---- */
   .card {
     background: var(--surface-1);
@@ -245,6 +368,14 @@
     </section>
 
     <section class="card">
+      <div class="gallery-header">
+        <p class="card-title" id="gallery-title" style="margin:0;">Boats spotted</p>
+        <div class="day-selector" id="day-selector"></div>
+      </div>
+      <div class="carousel" id="carousel"></div>
+    </section>
+
+    <section class="card">
       <p class="card-title">Boats per day · last 14 days</p>
       <div id="chart"></div>
     </section>
@@ -254,9 +385,19 @@
       <a href="https://github.com/marcovanheerde/mycanal">source on GitHub</a>
     </footer>
   </main>
-</div>
 
-<div id="tooltip"></div>
+  <div id="tooltip"></div>
+
+  <div id="lightbox">
+    <button class="lb-close" id="lb-close" aria-label="Close">✕</button>
+    <button class="lb-nav lb-prev" id="lb-prev" aria-label="Previous">‹</button>
+    <button class="lb-nav lb-next" id="lb-next" aria-label="Next">›</button>
+    <div>
+      <img id="lb-img" src="" alt="Boat photo">
+      <p class="lb-time" id="lb-time"></p>
+    </div>
+  </div>
+</div>
 
 <script>
 const REFRESH_MS = 20000;
@@ -330,6 +471,108 @@ function renderChart(history) {
   });
 }
 
+let selectedDay = null;
+let currentPhotos = [];
+let lightboxIndex = 0;
+
+function formatDayPill(dateStr) {
+  return new Date(dateStr + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function formatDayTitle(dateStr) {
+  return new Date(dateStr + "T00:00:00").toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
+}
+
+function renderCarousel(photos) {
+  currentPhotos = photos;
+  const carouselEl = document.getElementById("carousel");
+  if (!photos || photos.length === 0) {
+    carouselEl.innerHTML = '<p class="empty-state">No boats spotted this day.</p>';
+    return;
+  }
+  carouselEl.innerHTML = photos.map((p, i) => `
+    <button class="carousel-item" data-index="${i}">
+      <img src="data/${p.file}" loading="lazy" alt="Boat at ${p.time}">
+      <time>${p.time}</time>
+    </button>
+  `).join("");
+  carouselEl.querySelectorAll(".carousel-item").forEach(btn => {
+    btn.addEventListener("click", () => openLightbox(parseInt(btn.dataset.index, 10)));
+  });
+}
+
+async function loadDayPhotos(day, { silent = false } = {}) {
+  selectedDay = day;
+  document.getElementById("gallery-title").textContent = "Boats spotted — " + formatDayTitle(day);
+  document.querySelectorAll(".day-pill").forEach(p => p.classList.toggle("active", p.dataset.day === day));
+  try {
+    const res = await fetch(`data/boats/${day}.json`, { cache: "no-store" });
+    const photos = res.ok ? await res.json() : [];
+    renderCarousel(photos);
+  } catch (err) {
+    if (!silent) renderCarousel([]);
+  }
+}
+
+async function loadGallery() {
+  try {
+    const res = await fetch("data/boats/index.json", { cache: "no-store" });
+    if (!res.ok) throw new Error("no boats yet");
+    const days = await res.json();
+    if (days.length === 0) throw new Error("empty");
+
+    const wasFollowingLatest = selectedDay === null || selectedDay === days[0];
+    const selectorEl = document.getElementById("day-selector");
+    selectorEl.innerHTML = days.map(d =>
+      `<button class="day-pill" data-day="${d}">${formatDayPill(d)}</button>`
+    ).join("");
+    selectorEl.querySelectorAll(".day-pill").forEach(btn => {
+      btn.addEventListener("click", () => loadDayPhotos(btn.dataset.day));
+    });
+
+    if (wasFollowingLatest) {
+      await loadDayPhotos(days[0]);
+    } else {
+      document.querySelectorAll(".day-pill").forEach(p => p.classList.toggle("active", p.dataset.day === selectedDay));
+    }
+  } catch (err) {
+    document.getElementById("gallery-title").textContent = "Boats spotted";
+    document.getElementById("carousel").innerHTML = '<p class="empty-state">No boats spotted yet.</p>';
+  }
+}
+
+function openLightbox(index) {
+  lightboxIndex = index;
+  updateLightbox();
+  document.getElementById("lightbox").classList.add("open");
+}
+function closeLightbox() {
+  document.getElementById("lightbox").classList.remove("open");
+}
+function updateLightbox() {
+  const p = currentPhotos[lightboxIndex];
+  document.getElementById("lb-img").src = "data/" + p.file;
+  document.getElementById("lb-time").textContent = formatDayTitle(selectedDay) + " · " + p.time;
+}
+document.getElementById("lb-close").addEventListener("click", closeLightbox);
+document.getElementById("lightbox").addEventListener("click", (e) => {
+  if (e.target.id === "lightbox") closeLightbox();
+});
+document.getElementById("lb-prev").addEventListener("click", () => {
+  lightboxIndex = (lightboxIndex - 1 + currentPhotos.length) % currentPhotos.length;
+  updateLightbox();
+});
+document.getElementById("lb-next").addEventListener("click", () => {
+  lightboxIndex = (lightboxIndex + 1) % currentPhotos.length;
+  updateLightbox();
+});
+document.addEventListener("keydown", (e) => {
+  if (!document.getElementById("lightbox").classList.contains("open")) return;
+  if (e.key === "Escape") closeLightbox();
+  if (e.key === "ArrowLeft") document.getElementById("lb-prev").click();
+  if (e.key === "ArrowRight") document.getElementById("lb-next").click();
+});
+
 async function refresh() {
   try {
     const res = await fetch("data/status.json", { cache: "no-store" });
@@ -350,7 +593,9 @@ async function refresh() {
 }
 
 refresh();
+loadGallery();
 setInterval(refresh, REFRESH_MS);
+setInterval(loadGallery, REFRESH_MS);
 </script>
 </body>
 </html>

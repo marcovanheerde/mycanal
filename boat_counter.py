@@ -41,7 +41,10 @@ DAILY_COUNTS_FILE = PROJECT_DIR / "daily_counts.csv"
 DATA_DIR = PROJECT_DIR / "data"
 STATUS_FILE = DATA_DIR / "status.json"
 LATEST_IMAGE_FILE = DATA_DIR / "latest.jpg"
+BOATS_DIR = DATA_DIR / "boats"
+BOATS_INDEX_FILE = BOATS_DIR / "index.json"
 DATA_DIR.mkdir(exist_ok=True)
+BOATS_DIR.mkdir(exist_ok=True)
 
 last_publish_time = 0.0
 
@@ -100,6 +103,33 @@ def read_history():
         ]
 
 
+def save_boat_photo(annotated_frame, today):
+    # Smaller than the main snapshot - there will be many more of these
+    # (one per boat, up to ~100/day) so size matters more here.
+    h, w = annotated_frame.shape[:2]
+    if w > 640:
+        scale = 640 / w
+        annotated_frame = cv2.resize(annotated_frame, (640, int(h * scale)))
+
+    day_str = today.isoformat()
+    day_dir = BOATS_DIR / day_str
+    day_dir.mkdir(exist_ok=True)
+
+    now = datetime.now()
+    filename = f"{now.strftime('%H%M%S')}.jpg"
+    cv2.imwrite(str(day_dir / filename), annotated_frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
+
+    manifest_file = BOATS_DIR / f"{day_str}.json"
+    manifest = json.loads(manifest_file.read_text()) if manifest_file.exists() else []
+    manifest.append({"time": now.strftime("%H:%M:%S"), "file": f"boats/{day_str}/{filename}"})
+    manifest_file.write_text(json.dumps(manifest, indent=2))
+
+    index = json.loads(BOATS_INDEX_FILE.read_text()) if BOATS_INDEX_FILE.exists() else []
+    if day_str not in index:
+        index.insert(0, day_str)
+        BOATS_INDEX_FILE.write_text(json.dumps(index, indent=2))
+
+
 def publish_status(annotated_frame, today, total):
     # Downscale for publishing - the local display window keeps full res,
     # but every published frame gets committed to git history, so keeping
@@ -120,7 +150,7 @@ def publish_status(annotated_frame, today, total):
 
     try:
         subprocess.run(
-            ["git", "add", str(STATUS_FILE), str(LATEST_IMAGE_FILE), str(DAILY_COUNTS_FILE)],
+            ["git", "add", str(DATA_DIR), str(DAILY_COUNTS_FILE)],
             cwd=PROJECT_DIR, check=True, capture_output=True, text=True,
         )
         diff = subprocess.run(
@@ -191,6 +221,8 @@ def on_prediction(result, video_frame):
     # snapshot shows the boat itself rather than an empty canal - the interval
     # publish below is just a freshness fallback for stretches with no boats.
     if PUBLISH_ENABLED and (just_counted or time.time() - last_publish_time >= PUBLISH_INTERVAL_SECONDS):
+        if just_counted:
+            save_boat_photo(annotated, today)
         publish_status(annotated, today, total)
         last_publish_time = time.time()
 
