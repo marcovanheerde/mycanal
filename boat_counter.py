@@ -165,7 +165,8 @@ def on_prediction(result, video_frame):
 
     # LineZone keys crossings by tracker_id, so a boat that lingers near
     # the line for many frames only increments the count once.
-    line_zone.trigger(detections)
+    crossed_in, crossed_out = line_zone.trigger(detections)
+    just_counted = bool(crossed_in.any() or crossed_out.any())
 
     labels = [
         f"boat {tracker_id} {confidence:.2f}"
@@ -186,7 +187,10 @@ def on_prediction(result, video_frame):
         pass
     frame_queue.put_nowait(annotated)
 
-    if PUBLISH_ENABLED and time.time() - last_publish_time >= PUBLISH_INTERVAL_SECONDS:
+    # Publish immediately when a boat is actually counted, so the published
+    # snapshot shows the boat itself rather than an empty canal - the interval
+    # publish below is just a freshness fallback for stretches with no boats.
+    if PUBLISH_ENABLED and (just_counted or time.time() - last_publish_time >= PUBLISH_INTERVAL_SECONDS):
         publish_status(annotated, today, total)
         last_publish_time = time.time()
 
