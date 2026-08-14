@@ -1,8 +1,11 @@
 import csv
+import json
 import os
 import queue
+import subprocess
 import sys
-from datetime import date
+import time
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import cv2
@@ -25,13 +28,22 @@ MODEL_ID = os.environ.get("ROBOFLOW_MODEL_ID", "amsterdam-boat-spotting-v2/1")
 RTSP_URL = os.environ.get("RTSP_URL")
 CONFIDENCE_THRESHOLD = float(os.environ.get("CONFIDENCE_THRESHOLD", "0.5"))
 LINE_COORDS = os.environ.get("LINE_COORDS")  # "x1,y1,x2,y2", optional
+PUBLISH_ENABLED = os.environ.get("PUBLISH_ENABLED", "false").lower() == "true"
+PUBLISH_INTERVAL_SECONDS = float(os.environ.get("PUBLISH_INTERVAL_SECONDS", "300"))
 
 if not API_KEY:
     sys.exit("ROBOFLOW_API_KEY is not set. Copy .env.example to .env and fill it in.")
 if not RTSP_URL:
     sys.exit("RTSP_URL is not set. Copy .env.example to .env and fill it in.")
 
-DAILY_COUNTS_FILE = Path(__file__).parent / "daily_counts.csv"
+PROJECT_DIR = Path(__file__).parent
+DAILY_COUNTS_FILE = PROJECT_DIR / "daily_counts.csv"
+DATA_DIR = PROJECT_DIR / "data"
+STATUS_FILE = DATA_DIR / "status.json"
+LATEST_IMAGE_FILE = DATA_DIR / "latest.jpg"
+DATA_DIR.mkdir(exist_ok=True)
+
+last_publish_time = 0.0
 
 tracker = ByteTrackTracker()
 box_annotator = sv.BoxAnnotator()
@@ -70,8 +82,57 @@ def log_daily_total(day, line_zone):
         writer.writerow([day.isoformat(), line_zone.in_count + line_zone.out_count])
 
 
+def read_history():
+    if not DAILY_COUNTS_FILE.exists():
+        return []
+    with open(DAILY_COUNTS_FILE, newline="") as f:
+        return [
+            {"date": row["date"], "count": int(row["total_boats"])}
+            for row in csv.DictReader(f)
+        ]
+
+
+def publish_status(annotated_frame, today, total):
+    # Downscale for publishing - the local display window keeps full res,
+    # but every published frame gets committed to git history, so keeping
+    # these small matters for repo size over weeks of continuous running.
+    h, w = annotated_frame.shape[:2]
+    if w > 960:
+        scale = 960 / w
+        annotated_frame = cv2.resize(annotated_frame, (960, int(h * scale)))
+    cv2.imwrite(str(LATEST_IMAGE_FILE), annotated_frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
+
+    status = {
+        "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
+        "today": {"date": today.isoformat(), "count": total},
+        "history": read_history(),
+    }
+    with open(STATUS_FILE, "w") as f:
+        json.dump(status, f, indent=2)
+
+    try:
+        subprocess.run(
+            ["git", "add", str(STATUS_FILE), str(LATEST_IMAGE_FILE), str(DAILY_COUNTS_FILE)],
+            cwd=PROJECT_DIR, check=True, capture_output=True, text=True,
+        )
+        diff = subprocess.run(
+            ["git", "diff", "--cached", "--quiet"], cwd=PROJECT_DIR, capture_output=True,
+        )
+        if diff.returncode == 0:
+            return  # nothing changed since the last publish
+        subprocess.run(
+            ["git", "commit", "-m", f"Publish: {total} boats on {today.isoformat()}"],
+            cwd=PROJECT_DIR, check=True, capture_output=True, text=True,
+        )
+        subprocess.run(
+            ["git", "push"], cwd=PROJECT_DIR, check=True, capture_output=True, text=True,
+        )
+    except subprocess.CalledProcessError as e:
+        print(f"Publish failed (will retry next interval): {e.stderr.strip()}")
+
+
 def on_prediction(result, video_frame):
-    global line_zone, frame_dims, current_day
+    global line_zone, frame_dims, current_day, last_publish_time
 
     frame = video_frame.image
     today = date.today()
@@ -86,6 +147,9 @@ def on_prediction(result, video_frame):
               f"Previous day's total saved to {DAILY_COUNTS_FILE.name}.")
         line_zone = build_line_zone(*frame_dims)
         current_day = today
+        if PUBLISH_ENABLED:
+            publish_status(frame, today, 0)
+            last_publish_time = time.time()
 
     detections = sv.Detections.from_inference(result)
     detections = detections[detections.confidence > CONFIDENCE_THRESHOLD]
@@ -113,6 +177,10 @@ def on_prediction(result, video_frame):
     except queue.Empty:
         pass
     frame_queue.put_nowait(annotated)
+
+    if PUBLISH_ENABLED and time.time() - last_publish_time >= PUBLISH_INTERVAL_SECONDS:
+        publish_status(annotated, today, total)
+        last_publish_time = time.time()
 
 
 pipeline = InferencePipeline.init(
