@@ -15,7 +15,8 @@
     --gridline:       #e1e0d9;
     --baseline:       #c3c2b7;
     --series-1:       #2a78d6;
-    --border:         rgba(11,11,11,0.10);
+    --series-1-wash:  rgba(42,120,214,0.08);
+    --border:         rgba(11,11,11,0.08);
   }
   @media (prefers-color-scheme: dark) {
     :root:where(:not([data-theme="light"])) .viz-root {
@@ -28,6 +29,7 @@
       --gridline:       #2c2c2a;
       --baseline:       #383835;
       --series-1:       #3987e5;
+      --series-1-wash:  rgba(57,135,229,0.14);
       --border:         rgba(255,255,255,0.10);
     }
   }
@@ -41,6 +43,7 @@
     --gridline:       #2c2c2a;
     --baseline:       #383835;
     --series-1:       #3987e5;
+    --series-1-wash:  rgba(57,135,229,0.14);
     --border:         rgba(255,255,255,0.10);
   }
 
@@ -50,135 +53,207 @@
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
     background: var(--page-plane);
     color: var(--text-primary);
+    -webkit-font-smoothing: antialiased;
   }
-  .wrap {
-    max-width: 760px;
-    margin: 0 auto;
-    padding: 24px 16px 64px;
-  }
-  header {
+
+  /* ---- nav ---- */
+  nav {
+    position: sticky;
+    top: 0;
+    z-index: 5;
     display: flex;
-    align-items: baseline;
+    align-items: center;
     justify-content: space-between;
-    gap: 12px;
-    flex-wrap: wrap;
-    margin-bottom: 20px;
+    padding: 18px 28px;
+    background: color-mix(in srgb, var(--surface-1) 88%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border);
   }
-  h1 {
-    font-size: 20px;
+  .wordmark {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
     font-weight: 600;
-    margin: 0;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: var(--series-1-wash);
+    color: var(--series-1);
   }
-  .updated {
-    font-size: 13px;
+  .pill .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--series-1);
+  }
+  .nav-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 12px;
     color: var(--text-muted);
   }
+
+  /* ---- layout ---- */
+  main {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 0 28px 80px;
+  }
+  section { margin-top: 56px; }
+  section:first-of-type { margin-top: 40px; }
+
+  /* ---- hero ---- */
+  .hero-frame {
+    border-radius: 24px;
+    overflow: hidden;
+    background: var(--gridline);
+    box-shadow: 0 1px 2px var(--border), 0 12px 32px -16px rgba(0,0,0,0.25);
+  }
+  .hero-frame img {
+    width: 100%;
+    display: block;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+  }
+  .empty-state {
+    font-size: 14px;
+    color: var(--text-muted);
+    padding: 48px 0;
+    text-align: center;
+  }
+  .hero-caption {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin: 14px 4px 0;
+  }
+
+  .stat-block {
+    text-align: center;
+    padding: 8px 0 0;
+  }
+  .stat-eyebrow {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--series-1);
+    margin: 0 0 10px;
+  }
+  .stat-value {
+    font-size: clamp(64px, 12vw, 104px);
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.03em;
+    margin: 0;
+  }
+  .stat-sub {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin: 14px 0 0;
+  }
+
+  /* ---- chart card ---- */
   .card {
     background: var(--surface-1);
     border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 20px;
-    margin-bottom: 16px;
+    border-radius: 20px;
+    padding: 28px;
   }
-  .hero-label {
-    font-size: 13px;
-    color: var(--text-secondary);
-    margin: 0 0 4px;
-  }
-  .hero-value {
-    font-size: 56px;
-    font-weight: 600;
-    line-height: 1;
-    margin: 0;
-    font-variant-numeric: proportional-nums;
-  }
-  .hero-sub {
-    font-size: 13px;
-    color: var(--text-muted);
-    margin-top: 6px;
-  }
-  .snapshot-card img {
-    width: 100%;
-    border-radius: 8px;
-    display: block;
-    background: var(--gridline);
-  }
-  .snapshot-caption {
-    font-size: 13px;
-    color: var(--text-muted);
-    margin-top: 10px;
-  }
-  .chart-title {
-    font-size: 14px;
-    font-weight: 600;
-    margin: 0 0 14px;
-  }
-  .empty-state {
-    font-size: 13px;
-    color: var(--text-muted);
-    padding: 12px 0;
+  .card-title {
+    font-size: 16px;
+    font-weight: 700;
+    margin: 0 0 20px;
+    letter-spacing: -0.01em;
   }
   svg { display: block; overflow: visible; }
   .bar { fill: var(--series-1); }
   .bar-hit { fill: transparent; }
-  .axis-label {
-    font-size: 11px;
-    fill: var(--text-muted);
-  }
+  .axis-label { font-size: 11px; fill: var(--text-muted); }
   .gridline { stroke: var(--gridline); stroke-width: 1; }
   .baseline { stroke: var(--baseline); stroke-width: 1; }
+
   #tooltip {
     position: fixed;
     pointer-events: none;
     background: var(--text-primary);
     color: var(--surface-1);
     font-size: 12px;
-    padding: 6px 9px;
-    border-radius: 6px;
+    font-weight: 600;
+    padding: 7px 10px;
+    border-radius: 8px;
     opacity: 0;
-    transform: translate(-50%, -110%);
+    transform: translate(-50%, -112%);
     transition: opacity 0.1s ease;
     white-space: nowrap;
     z-index: 10;
   }
+
   footer {
-    font-size: 12px;
+    font-size: 13px;
     color: var(--text-muted);
     text-align: center;
-    margin-top: 24px;
+    margin-top: 64px;
+    padding-top: 28px;
+    border-top: 1px solid var(--border);
   }
-  footer a { color: inherit; }
+  footer a {
+    color: var(--series-1);
+    text-decoration: none;
+    font-weight: 600;
+  }
+  footer a:hover { text-decoration: underline; }
+
+  @media (max-width: 560px) {
+    nav { padding: 16px; }
+    main { padding: 0 16px 64px; }
+    .card { padding: 20px; }
+  }
 </style>
 </head>
 <body>
-<div class="viz-root wrap">
-  <header>
-    <h1>🚤 Mycanal — live boat counter</h1>
-    <span class="updated" id="updated">loading…</span>
-  </header>
+<div class="viz-root">
+  <nav>
+    <span class="wordmark">🚤 Mycanal</span>
+    <div class="nav-right">
+      <span class="pill"><span class="dot"></span><span id="live-label">Live</span></span>
+      <span id="updated">loading…</span>
+    </div>
+  </nav>
 
-  <div class="card">
-    <p class="hero-label">Boats counted today</p>
-    <p class="hero-value" id="today-value">—</p>
-    <p class="hero-sub" id="today-date"></p>
-  </div>
+  <main>
+    <section>
+      <div class="hero-frame">
+        <img id="snapshot" src="data/latest.jpg" alt="Latest annotated camera snapshot"
+             onerror="this.style.display='none'; document.getElementById('snapshot-empty').style.display='block';">
+        <p class="empty-state" id="snapshot-empty" style="display:none;">No snapshot published yet — check back shortly.</p>
+      </div>
+      <p class="hero-caption">Latest frame from the canal camera, with detected boats boxed. Refreshes automatically.</p>
+    </section>
 
-  <div class="card snapshot-card">
-    <img id="snapshot" src="data/latest.jpg" alt="Latest annotated camera snapshot"
-         onerror="this.style.display='none'; document.getElementById('snapshot-empty').style.display='block';">
-    <p class="empty-state" id="snapshot-empty" style="display:none;">No snapshot published yet.</p>
-    <p class="snapshot-caption">Latest snapshot from the camera, boxes drawn around detected boats. Refreshes automatically.</p>
-  </div>
+    <section class="stat-block">
+      <p class="stat-eyebrow">Boats counted today</p>
+      <p class="stat-value" id="today-value">—</p>
+      <p class="stat-sub" id="today-date"></p>
+    </section>
 
-  <div class="card">
-    <p class="chart-title">Boats per day (last 14 days)</p>
-    <div id="chart"></div>
-  </div>
+    <section class="card">
+      <p class="card-title">Boats per day · last 14 days</p>
+      <div id="chart"></div>
+    </section>
 
-  <footer>
-    Boat detection running locally on a Roboflow-trained model · updates every ~60s ·
-    <a href="https://github.com/marcovanheerde/mycanal">source on GitHub</a>
-  </footer>
+    <footer>
+      Boat detection running locally on a Roboflow-trained model · updates every ~5 min ·
+      <a href="https://github.com/marcovanheerde/mycanal">source on GitHub</a>
+    </footer>
+  </main>
 </div>
 
 <div id="tooltip"></div>
@@ -201,8 +276,8 @@ function renderChart(history) {
   }
 
   const days = history.slice(-14);
-  const width = 720, height = 160;
-  const padLeft = 32, padBottom = 22, padTop = 10, padRight = 4;
+  const width = 800, height = 180;
+  const padLeft = 32, padBottom = 24, padTop = 10, padRight = 4;
   const plotW = width - padLeft - padRight;
   const plotH = height - padTop - padBottom;
   const maxVal = Math.max(1, ...days.map(d => d.count));
