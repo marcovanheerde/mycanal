@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mycanal — live boat counter</title>
+<style>
+  .viz-root {
+    color-scheme: light;
+    --surface-1:      #fcfcfb;
+    --page-plane:      #f9f9f7;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --gridline:       #e1e0d9;
+    --baseline:       #c3c2b7;
+    --series-1:       #2a78d6;
+    --border:         rgba(11,11,11,0.10);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) .viz-root {
+      color-scheme: dark;
+      --surface-1:      #1a1a19;
+      --page-plane:      #0d0d0d;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --gridline:       #2c2c2a;
+      --baseline:       #383835;
+      --series-1:       #3987e5;
+      --border:         rgba(255,255,255,0.10);
+    }
+  }
+  :root[data-theme="dark"] .viz-root {
+    color-scheme: dark;
+    --surface-1:      #1a1a19;
+    --page-plane:      #0d0d0d;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #898781;
+    --gridline:       #2c2c2a;
+    --baseline:       #383835;
+    --series-1:       #3987e5;
+    --border:         rgba(255,255,255,0.10);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--page-plane);
+    color: var(--text-primary);
+  }
+  .wrap {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 24px 16px 64px;
+  }
+  header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+  }
+  h1 {
+    font-size: 20px;
+    font-weight: 600;
+    margin: 0;
+  }
+  .updated {
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+  .card {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .hero-label {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin: 0 0 4px;
+  }
+  .hero-value {
+    font-size: 56px;
+    font-weight: 600;
+    line-height: 1;
+    margin: 0;
+    font-variant-numeric: proportional-nums;
+  }
+  .hero-sub {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-top: 6px;
+  }
+  .snapshot-card img {
+    width: 100%;
+    border-radius: 8px;
+    display: block;
+    background: var(--gridline);
+  }
+  .snapshot-caption {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-top: 10px;
+  }
+  .chart-title {
+    font-size: 14px;
+    font-weight: 600;
+    margin: 0 0 14px;
+  }
+  .empty-state {
+    font-size: 13px;
+    color: var(--text-muted);
+    padding: 12px 0;
+  }
+  svg { display: block; overflow: visible; }
+  .bar { fill: var(--series-1); }
+  .bar-hit { fill: transparent; }
+  .axis-label {
+    font-size: 11px;
+    fill: var(--text-muted);
+  }
+  .gridline { stroke: var(--gridline); stroke-width: 1; }
+  .baseline { stroke: var(--baseline); stroke-width: 1; }
+  #tooltip {
+    position: fixed;
+    pointer-events: none;
+    background: var(--text-primary);
+    color: var(--surface-1);
+    font-size: 12px;
+    padding: 6px 9px;
+    border-radius: 6px;
+    opacity: 0;
+    transform: translate(-50%, -110%);
+    transition: opacity 0.1s ease;
+    white-space: nowrap;
+    z-index: 10;
+  }
+  footer {
+    font-size: 12px;
+    color: var(--text-muted);
+    text-align: center;
+    margin-top: 24px;
+  }
+  footer a { color: inherit; }
+</style>
+</head>
+<body>
+<div class="viz-root wrap">
+  <header>
+    <h1>🚤 Mycanal — live boat counter</h1>
+    <span class="updated" id="updated">loading…</span>
+  </header>
+
+  <div class="card">
+    <p class="hero-label">Boats counted today</p>
+    <p class="hero-value" id="today-value">—</p>
+    <p class="hero-sub" id="today-date"></p>
+  </div>
+
+  <div class="card snapshot-card">
+    <img id="snapshot" src="data/latest.jpg" alt="Latest annotated camera snapshot"
+         onerror="this.style.display='none'; document.getElementById('snapshot-empty').style.display='block';">
+    <p class="empty-state" id="snapshot-empty" style="display:none;">No snapshot published yet.</p>
+    <p class="snapshot-caption">Latest snapshot from the camera, boxes drawn around detected boats. Refreshes automatically.</p>
+  </div>
+
+  <div class="card">
+    <p class="chart-title">Boats per day (last 14 days)</p>
+    <div id="chart"></div>
+  </div>
+
+  <footer>
+    Boat detection running locally on a Roboflow-trained model · updates every ~60s ·
+    <a href="https://github.com/marcovanheerde/mycanal">source on GitHub</a>
+  </footer>
+</div>
+
+<div id="tooltip"></div>
+
+<script>
+const REFRESH_MS = 20000;
+
+function formatTimestamp(iso) {
+  const d = new Date(iso);
+  return d.toLocaleString(undefined, {
+    month: "short", day: "numeric", hour: "numeric", minute: "2-digit"
+  });
+}
+
+function renderChart(history) {
+  const chartEl = document.getElementById("chart");
+  if (!history || history.length === 0) {
+    chartEl.innerHTML = '<p class="empty-state">No completed days yet — check back after midnight.</p>';
+    return;
+  }
+
+  const days = history.slice(-14);
+  const width = 720, height = 160;
+  const padLeft = 32, padBottom = 22, padTop = 10, padRight = 4;
+  const plotW = width - padLeft - padRight;
+  const plotH = height - padTop - padBottom;
+  const maxVal = Math.max(1, ...days.map(d => d.count));
+  const niceMax = Math.ceil(maxVal / 5) * 5 || 5;
+
+  const barSlot = plotW / days.length;
+  const barW = Math.min(24, barSlot * 0.6);
+
+  let bars = "";
+  let gridlines = "";
+  const ticks = 3;
+  for (let i = 0; i <= ticks; i++) {
+    const v = Math.round((niceMax / ticks) * i);
+    const y = padTop + plotH - (v / niceMax) * plotH;
+    gridlines += `<line class="gridline" x1="${padLeft}" x2="${width - padRight}" y1="${y}" y2="${y}"></line>`;
+    gridlines += `<text class="axis-label" x="${padLeft - 6}" y="${y + 3}" text-anchor="end">${v}</text>`;
+  }
+
+  days.forEach((d, i) => {
+    const slotX = padLeft + i * barSlot;
+    const barX = slotX + (barSlot - barW) / 2;
+    const barH = (d.count / niceMax) * plotH;
+    const barY = padTop + plotH - barH;
+    const label = new Date(d.date + "T00:00:00").toLocaleDateString(undefined, { day: "numeric", month: "short" });
+    bars += `
+      <rect class="bar" x="${barX}" y="${barY}" width="${barW}" height="${Math.max(barH, 1)}" rx="4"></rect>
+      <rect class="bar-hit" data-date="${d.date}" data-count="${d.count}"
+            x="${slotX}" y="${padTop}" width="${barSlot}" height="${plotH}"></rect>
+      <text class="axis-label" x="${slotX + barSlot / 2}" y="${height - 4}" text-anchor="middle">${label}</text>
+    `;
+  });
+
+  chartEl.innerHTML = `
+    <svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}">
+      ${gridlines}
+      <line class="baseline" x1="${padLeft}" x2="${width - padRight}" y1="${padTop + plotH}" y2="${padTop + plotH}"></line>
+      ${bars}
+    </svg>
+  `;
+
+  const tooltip = document.getElementById("tooltip");
+  chartEl.querySelectorAll(".bar-hit").forEach(hit => {
+    hit.addEventListener("mousemove", (e) => {
+      tooltip.textContent = `${hit.dataset.date}: ${hit.dataset.count} boats`;
+      tooltip.style.left = e.clientX + "px";
+      tooltip.style.top = e.clientY + "px";
+      tooltip.style.opacity = "1";
+    });
+    hit.addEventListener("mouseleave", () => { tooltip.style.opacity = "0"; });
+  });
+}
+
+async function refresh() {
+  try {
+    const res = await fetch("data/status.json", { cache: "no-store" });
+    if (!res.ok) throw new Error("status.json not found yet");
+    const status = await res.json();
+
+    document.getElementById("today-value").textContent = status.today.count;
+    document.getElementById("today-date").textContent = status.today.date;
+    document.getElementById("updated").textContent = "updated " + formatTimestamp(status.updated_at);
+    document.getElementById("snapshot").src = "data/latest.jpg?t=" + encodeURIComponent(status.updated_at);
+    document.getElementById("snapshot-empty").style.display = "none";
+    document.getElementById("snapshot").style.display = "block";
+
+    renderChart(status.history);
+  } catch (err) {
+    document.getElementById("updated").textContent = "waiting for first publish…";
+  }
+}
+
+refresh();
+setInterval(refresh, REFRESH_MS);
+</script>
+</body>
+</html>
